@@ -89,7 +89,8 @@ def _ensure_api_keys(user):
     if not user_doc.api_key:
         user_doc.api_key = frappe.generate_hash(length=15)
         user_doc.save(ignore_permissions=True)
-    api_secret = user_doc.get_password("api_secret") if user_doc.api_key else None
+    # get_password raises if the secret was never set, so suppress that.
+    api_secret = user_doc.get_password("api_secret", raise_exception=False)
     if not api_secret:
         api_secret = frappe.generate_hash(length=15)
         user_doc.api_secret = api_secret
@@ -104,10 +105,10 @@ def _ensure_api_keys(user):
 @frappe.whitelist(allow_guest=True)
 def app_login(usr, pwd):
     """Authenticate a portal user, return an API token + their customer."""
+    # authenticate() validates the password and sets .user; we deliberately do
+    # NOT call post_login() — this is a token endpoint, not a web session login.
     login_manager = LoginManager()
     login_manager.authenticate(usr, pwd)      # raises on bad credentials
-    login_manager.post_login()
-
     user = login_manager.user
     customer = get_customer_for_user(user)
     if not customer:
