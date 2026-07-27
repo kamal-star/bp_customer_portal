@@ -1,25 +1,39 @@
 {
   "expo": {
-    "name": "BP Great North Fuel Orders",
+    "name": "Great North Fuel",
     "slug": "bp-order-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
+    "icon": "./assets/icon.png",
     "splash": {
+      "image": "./assets/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#0B3D2E"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "android": {
       "package": "com.bpgreatnorth.orders",
-      "versionCode": 1
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0B3D2E"
+      }
     },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.bpgreatnorth.orders"
     },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
     "extra": {
       "defaultServerUrl": "https://bpgreatnorth.com"
-    }
+    },
+    "plugins": [
+      "@react-native-community/datetimepicker"
+    ]
   }
 }
