@@ -37,6 +37,17 @@ FUEL_PRODUCTS = [
     {"value": "P002", "label": "Petrol"},
 ]
 
+# Stations offered in the form — the exact list the /fuel_orders web portal shows
+# (a subset of Warehouses; excludes depots / transit / in-transit warehouses).
+STATIONS = [
+    "KARATU STATION - GNSS",
+    "KISONGO-MARATHON - GNSS",
+    "NGULELO STATION - GNSS",
+    "NJIRO STATION - GNSS",
+    "SAKINA STATION - GNSS",
+    "TENGERU STATION - GNSS",
+]
+
 
 # ---------------------------------------------------------------------------
 # Customer resolution (same mechanism as the web portal)
@@ -129,24 +140,9 @@ def get_profile():
 
 @frappe.whitelist()
 def get_form_options():
-    """Fuel products + stations for the create/edit form."""
+    """Fuel products + stations for the create/edit form (matches the web portal)."""
     _require_customer()
-    stations = frappe.get_all(
-        "Warehouse",
-        filters={"is_group": 0, "disabled": 0, "name": ["like", "%- GNSS"]},
-        fields=["name"],
-        order_by="name asc",
-    )
-    station_values = [w.name for w in stations]
-    if not station_values:
-        # Fallback to any non-group warehouse if the naming pattern differs.
-        station_values = [
-            w.name
-            for w in frappe.get_all(
-                "Warehouse", filters={"is_group": 0, "disabled": 0}, fields=["name"], order_by="name asc"
-            )
-        ]
-    return {"products": FUEL_PRODUCTS, "stations": station_values}
+    return {"products": FUEL_PRODUCTS, "stations": STATIONS}
 
 
 # ---------------------------------------------------------------------------
