@@ -5,7 +5,7 @@ your ERPNext server.
 
 ## Prerequisites
 
-- Node.js 18 or newer
+- Node.js 20 or newer (required by Expo SDK 54)
 - The **Expo Go** app on your Android phone (from the Play Store) for quick testing,
   OR Android Studio if you want a standalone APK
 - The backend already installed (see `../erpnext-app/INSTALL.md`)
