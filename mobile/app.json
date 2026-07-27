@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "BP Great North Fuel Orders",
+    "slug": "bp-order-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#0B3D2E"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "android": {
+      "package": "com.bpgreatnorth.orders",
+      "versionCode": 1
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.bpgreatnorth.orders"
+    },
+    "extra": {
+      "defaultServerUrl": "https://bpgreatnorth.com"
+    }
+  }
+}
