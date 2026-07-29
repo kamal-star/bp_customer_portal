@@ -66,6 +66,10 @@ export const api = {
 
   getFormOptions: () => client.get(`${M}.get_form_options`).then(unwrap),
 
+  getDashboard: () => client.get(`${M}.get_dashboard`).then(unwrap),
+
+  getTransactions: (params) => client.get(`${M}.get_transactions`, { params }).then(unwrap),
+
   getOrders: (params) => client.get(`${M}.get_fuel_orders`, { params }).then(unwrap),
 
   getOrder: (name) => client.get(`${M}.get_fuel_order`, { params: { name } }).then(unwrap),

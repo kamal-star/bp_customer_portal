@@ -2,6 +2,7 @@ import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
@@ -18,6 +19,7 @@ export default function OrderDetailScreen({ route, navigation }) {
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
+  const [showCancel, setShowCancel] = useState(false);
   const [error, setError] = useState(null);
 
   const load = useCallback(async () => {
@@ -37,14 +39,8 @@ export default function OrderDetailScreen({ route, navigation }) {
     }, [load])
   );
 
-  function confirmCancel() {
-    Alert.alert("Cancel order", `Cancel fuel order ${order.name}? This cannot be undone.`, [
-      { text: "No", style: "cancel" },
-      { text: "Yes, cancel", style: "destructive", onPress: doCancel },
-    ]);
-  }
-
   async function doCancel() {
+    setShowCancel(false);
     setActing(true);
     try {
       await api.cancelOrder(order.name);
@@ -119,12 +115,35 @@ export default function OrderDetailScreen({ route, navigation }) {
             </TouchableOpacity>
           )}
           {order.cancellable && (
-            <TouchableOpacity style={[styles.btn, styles.btnDanger]} onPress={confirmCancel}>
+            <TouchableOpacity
+              style={[styles.btn, styles.btnDanger]}
+              onPress={() => setShowCancel(true)}
+            >
               <Text style={styles.btnDangerText}>Cancel order</Text>
             </TouchableOpacity>
           )}
         </View>
       )}
+
+      <Modal visible={showCancel} transparent animationType="fade" onRequestClose={() => setShowCancel(false)}>
+        <View style={styles.backdrop}>
+          <View style={styles.confirmCard}>
+            <View style={styles.trashCircle}>
+              <Text style={styles.trashIcon}>🗑️</Text>
+            </View>
+            <Text style={styles.confirmTitle}>Cancel Order?</Text>
+            <Text style={styles.confirmBody}>
+              Are you sure you want to cancel this fuel order? This action cannot be undone.
+            </Text>
+            <TouchableOpacity style={styles.confirmYes} onPress={doCancel}>
+              <Text style={styles.confirmYesText}>Yes, Cancel Order</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.confirmNo} onPress={() => setShowCancel(false)}>
+              <Text style={styles.confirmNoText}>No, Go Back</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -185,4 +204,55 @@ const styles = StyleSheet.create({
   btnPrimaryText: { color: "#fff", fontSize: 16, fontWeight: "700" },
   btnDanger: { backgroundColor: "#fff", borderWidth: 1.5, borderColor: colors.danger },
   btnDangerText: { color: colors.danger, fontSize: 16, fontWeight: "700" },
+  backdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 30,
+  },
+  confirmCard: {
+    backgroundColor: "#fff",
+    borderRadius: 18,
+    padding: 24,
+    width: "100%",
+    alignItems: "center",
+  },
+  trashCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: "#FDEaea",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 14,
+  },
+  trashIcon: { fontSize: 30 },
+  confirmTitle: { fontSize: 20, fontWeight: "800", color: colors.text, marginBottom: 8 },
+  confirmBody: {
+    fontSize: 14,
+    color: colors.muted,
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  confirmYes: {
+    backgroundColor: colors.danger,
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: "center",
+    width: "100%",
+  },
+  confirmYesText: { color: "#fff", fontSize: 16, fontWeight: "700" },
+  confirmNo: {
+    backgroundColor: "#fff",
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: "center",
+    width: "100%",
+    marginTop: 10,
+  },
+  confirmNoText: { color: colors.text, fontSize: 16, fontWeight: "700" },
 });

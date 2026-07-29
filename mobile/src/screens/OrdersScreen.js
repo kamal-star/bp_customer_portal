@@ -1,7 +1,6 @@
-import React, { useCallback, useEffect, useLayoutEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   RefreshControl,
   StyleSheet,
@@ -12,12 +11,10 @@ import {
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { api, extractError } from "../api/client";
-import { useAuth } from "../context/AuthContext";
 import { colors, statusColor } from "../theme";
 import { STATUSES, productLabel } from "../constants";
 
-export default function OrdersScreen({ navigation }) {
-  const { logout } = useAuth();
+export default function OrdersScreen({ navigation, route }) {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -25,22 +22,16 @@ export default function OrdersScreen({ navigation }) {
   const [status, setStatus] = useState("All");
   const [error, setError] = useState(null);
 
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      headerRight: () => (
-        <TouchableOpacity onPress={onLogout} hitSlop={10}>
-          <Text style={{ color: "#fff", fontWeight: "600" }}>Sign out</Text>
-        </TouchableOpacity>
-      ),
-    });
-  }, [navigation]);
-
-  function onLogout() {
-    Alert.alert("Sign out", "Sign out of this account?", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Sign out", style: "destructive", onPress: logout },
-    ]);
-  }
+  // Apply a status filter passed in from the Dashboard cards.
+  useEffect(() => {
+    const incoming = route.params?.status;
+    if (incoming) {
+      setStatus(incoming);
+      setLoading(true);
+      load({ status: incoming });
+      navigation.setParams({ status: undefined });
+    }
+  }, [route.params?.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const load = useCallback(
     async (opts = {}) => {
