@@ -30,7 +30,10 @@
       "favicon": "./assets/favicon.png"
     },
     "extra": {
-      "defaultServerUrl": "https://bpgreatnorth.com"
+      "defaultServerUrl": "https://bpgreatnorth.com",
+      "eas": {
+        "projectId": "90d15e03-0c9f-43b1-aa2a-d5b51127bed4"
+      }
     },
     "plugins": [
       "@react-native-community/datetimepicker"

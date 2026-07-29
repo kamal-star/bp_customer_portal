@@ -131,11 +131,30 @@ def app_login(usr, pwd):
 @frappe.whitelist()
 def get_profile():
     customer = _require_customer()
+    user = frappe.session.user
+    udoc = (
+        frappe.db.get_value("User", user, ["full_name", "mobile_no", "phone"], as_dict=True)
+        or {}
+    )
+    linked = frappe.get_all(
+        "Portal User",
+        filters={"user": user, "parenttype": "Customer"},
+        fields=["parent"],
+    )
+    customers = [
+        {
+            "customer": row.parent,
+            "customer_name": frappe.db.get_value("Customer", row.parent, "customer_name") or row.parent,
+        }
+        for row in linked
+    ]
     return {
-        "user": frappe.session.user,
-        "full_name": frappe.db.get_value("User", frappe.session.user, "full_name"),
+        "user": user,
+        "full_name": udoc.get("full_name"),
+        "mobile": udoc.get("mobile_no") or udoc.get("phone"),
         "customer": customer,
         "customer_name": frappe.db.get_value("Customer", customer, "customer_name") or customer,
+        "customers": customers,
     }
 
 
@@ -167,6 +186,7 @@ def get_fuel_orders(search=None, status=None, start=0, page_length=50):
             "vehicle": ["like", like],
             "driver_name": ["like", like],
             "customer_po_no": ["like", like],
+            "otp": ["like", like],
         }
 
     return frappe.get_all(
@@ -176,6 +196,60 @@ def get_fuel_orders(search=None, status=None, start=0, page_length=50):
         fields=[
             "name", "date", "status", "item", "qty", "station", "vehicle",
             "driver_name", "driver_mobile_number", "customer_po_no", "otp", "remarks",
+            "invoice_qty", "sales_invoice", "efd",
+        ],
+        order_by="modified desc",
+        start=int(start),
+        page_length=int(page_length),
+    )
+
+
+@frappe.whitelist()
+def get_dashboard():
+    """This-month order counts by status for the dashboard cards."""
+    from frappe.utils import get_first_day, get_last_day, nowdate, formatdate
+
+    customer = _require_customer()
+    start = get_first_day(nowdate())
+    end = get_last_day(nowdate())
+
+    def count(status=None):
+        f = {"customer": customer, "date": ["between", [start, end]]}
+        if status:
+            f["status"] = status
+        return frappe.db.count(DOCTYPE, f)
+
+    return {
+        "month": formatdate(start, "MMMM yyyy"),
+        "all": count(),
+        "received": count("Received"),
+        "served": count("Served"),
+        "cancelled": count("Cancelled"),
+    }
+
+
+@frappe.whitelist()
+def get_transactions(search=None, start=0, page_length=50):
+    """Invoiced orders with billing details (actual qty, invoice ref, EFD link)."""
+    customer = _require_customer()
+
+    filters = {"customer": customer, "sales_invoice": ["not in", [None, ""]]}
+    or_filters = None
+    if search:
+        like = f"%{search}%"
+        or_filters = {
+            "name": ["like", like],
+            "sales_invoice": ["like", like],
+            "vehicle": ["like", like],
+        }
+
+    return frappe.get_all(
+        DOCTYPE,
+        filters=filters,
+        or_filters=or_filters,
+        fields=[
+            "name", "date", "item", "qty", "invoice_qty",
+            "sales_invoice", "efd", "status", "vehicle",
         ],
         order_by="modified desc",
         start=int(start),
@@ -191,7 +265,9 @@ def get_fuel_order(name):
     if doc.customer != customer:
         frappe.throw(_("You are not allowed to view this order."), frappe.PermissionError)
 
-    editable = doc.status != "Cancelled"
+    # Only new (Received) orders can be edited; Served/Cancelled cannot.
+    editable = doc.status == "Received"
+    cancellable = doc.status != "Cancelled"
     return {
         "name": doc.name,
         "status": doc.status,
@@ -208,8 +284,10 @@ def get_fuel_order(name):
         "otp": doc.otp,
         "sales_order": doc.sales_order,
         "sales_invoice": doc.sales_invoice,
+        "invoice_qty": doc.invoice_qty,
+        "efd": doc.efd,
         "editable": editable,
-        "cancellable": editable,
+        "cancellable": cancellable,
     }
 
 
