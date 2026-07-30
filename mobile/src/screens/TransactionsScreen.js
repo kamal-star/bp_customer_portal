@@ -16,42 +16,64 @@ import { api, extractError } from "../api/client";
 import { colors } from "../theme";
 import { productLabel } from "../constants";
 
+const PAGE_SIZE = 20;
+
 export default function TransactionsScreen() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [error, setError] = useState(null);
 
-  const load = useCallback(
-    async (opts = {}) => {
-      try {
-        setError(null);
-        const data = await api.getTransactions({ search: opts.search ?? search, page_length: 100 });
-        setRows(Array.isArray(data) ? data : []);
-      } catch (e) {
-        setError(extractError(e));
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
-      }
-    },
-    [search]
-  );
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput.trim()), 350);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  const reload = useCallback(async () => {
+    setError(null);
+    try {
+      const data = await api.getTransactions({ search, start: 0, page_length: PAGE_SIZE });
+      const arr = Array.isArray(data) ? data : [];
+      setRows(arr);
+      setHasMore(arr.length === PAGE_SIZE);
+    } catch (e) {
+      setError(extractError(e));
+      setRows([]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [search]);
 
   useFocusEffect(
     useCallback(() => {
-      load();
-    }, [load])
+      setLoading(true);
+      reload();
+    }, [reload])
   );
 
-  useEffect(() => {
-    const t = setTimeout(() => {
-      setLoading(true);
-      load({ search });
-    }, 350);
-    return () => clearTimeout(t);
-  }, [search]); // eslint-disable-line react-hooks/exhaustive-deps
+  async function loadMore() {
+    if (loadingMore || !hasMore || loading || refreshing) return;
+    setLoadingMore(true);
+    try {
+      const data = await api.getTransactions({
+        search,
+        start: rows.length,
+        page_length: PAGE_SIZE,
+      });
+      const arr = Array.isArray(data) ? data : [];
+      setRows((prev) => [...prev, ...arr]);
+      setHasMore(arr.length === PAGE_SIZE);
+    } catch (_) {
+      /* keep current */
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   async function openEfd(url) {
     try {
@@ -106,8 +128,8 @@ export default function TransactionsScreen() {
       <View style={styles.searchWrap}>
         <TextInput
           style={styles.search}
-          value={search}
-          onChangeText={setSearch}
+          value={searchInput}
+          onChangeText={setSearchInput}
           placeholder="Search order, invoice or vehicle"
           placeholderTextColor={colors.muted}
           autoCapitalize="none"
@@ -122,15 +144,24 @@ export default function TransactionsScreen() {
           keyExtractor={(o) => o.name}
           renderItem={renderItem}
           contentContainerStyle={{ padding: 12 }}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.4}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
               onRefresh={() => {
                 setRefreshing(true);
-                load();
+                reload();
               }}
               colors={[colors.primary]}
             />
+          }
+          ListFooterComponent={
+            loadingMore ? (
+              <ActivityIndicator style={{ marginVertical: 16 }} color={colors.primary} />
+            ) : !hasMore && rows.length > 0 ? (
+              <Text style={styles.endText}>No more transactions</Text>
+            ) : null
           }
           ListEmptyComponent={
             <View style={styles.empty}>
@@ -182,6 +213,7 @@ const styles = StyleSheet.create({
   },
   efdText: { color: colors.received, fontWeight: "700", fontSize: 14 },
   noEfd: { marginTop: 14, color: colors.muted, fontSize: 13, fontStyle: "italic" },
+  endText: { textAlign: "center", color: colors.muted, fontSize: 13, marginVertical: 16 },
   empty: { alignItems: "center", marginTop: 60, paddingHorizontal: 24 },
   emptyText: { color: colors.muted, fontSize: 15, textAlign: "center" },
 });

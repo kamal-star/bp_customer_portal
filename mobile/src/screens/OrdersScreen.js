@@ -14,64 +14,77 @@ import { api, extractError } from "../api/client";
 import { colors, statusColor } from "../theme";
 import { STATUSES, productLabel } from "../constants";
 
+const PAGE_SIZE = 20;
+
 export default function OrdersScreen({ navigation, route }) {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("All");
   const [error, setError] = useState(null);
 
-  // Apply a status filter passed in from the Dashboard cards.
+  // Debounce the search box -> committed `search`.
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput.trim()), 350);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  // Status filter passed in from the Dashboard cards.
   useEffect(() => {
     const incoming = route.params?.status;
     if (incoming) {
       setStatus(incoming);
-      setLoading(true);
-      load({ status: incoming });
       navigation.setParams({ status: undefined });
     }
   }, [route.params?.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const load = useCallback(
-    async (opts = {}) => {
-      try {
-        setError(null);
-        const data = await api.getOrders({
-          search: opts.search ?? search,
-          status: opts.status ?? status,
-          page_length: 100,
-        });
-        setOrders(Array.isArray(data) ? data : []);
-      } catch (e) {
-        setError(extractError(e));
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
-      }
-    },
-    [search, status]
-  );
+  // Load the first page. Recreated when search/status change.
+  const reload = useCallback(async () => {
+    setError(null);
+    try {
+      const data = await api.getOrders({ search, status, start: 0, page_length: PAGE_SIZE });
+      const arr = Array.isArray(data) ? data : [];
+      setOrders(arr);
+      setHasMore(arr.length === PAGE_SIZE);
+    } catch (e) {
+      setError(extractError(e));
+      setOrders([]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [search, status]);
 
+  // Reload on focus and whenever search/status change.
   useFocusEffect(
     useCallback(() => {
-      load();
-    }, [load])
+      setLoading(true);
+      reload();
+    }, [reload])
   );
 
-  // Debounced search.
-  useEffect(() => {
-    const t = setTimeout(() => {
-      setLoading(true);
-      load({ search });
-    }, 350);
-    return () => clearTimeout(t);
-  }, [search]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  function onPickStatus(s) {
-    setStatus(s);
-    setLoading(true);
-    load({ status: s });
+  async function loadMore() {
+    if (loadingMore || !hasMore || loading || refreshing) return;
+    setLoadingMore(true);
+    try {
+      const data = await api.getOrders({
+        search,
+        status,
+        start: orders.length,
+        page_length: PAGE_SIZE,
+      });
+      const arr = Array.isArray(data) ? data : [];
+      setOrders((prev) => [...prev, ...arr]);
+      setHasMore(arr.length === PAGE_SIZE);
+    } catch (_) {
+      // keep what we have; user can pull to refresh
+    } finally {
+      setLoadingMore(false);
+    }
   }
 
   function renderItem({ item }) {
@@ -116,9 +129,9 @@ export default function OrdersScreen({ navigation, route }) {
       <View style={styles.searchWrap}>
         <TextInput
           style={styles.search}
-          value={search}
-          onChangeText={setSearch}
-          placeholder="Search order, vehicle, driver or PO"
+          value={searchInput}
+          onChangeText={setSearchInput}
+          placeholder="Search order, vehicle, driver, PO or OTP"
           placeholderTextColor={colors.muted}
           autoCapitalize="none"
         />
@@ -134,7 +147,10 @@ export default function OrdersScreen({ navigation, route }) {
           renderItem={({ item: s }) => (
             <TouchableOpacity
               style={[styles.chip, status === s && styles.chipActive]}
-              onPress={() => onPickStatus(s)}
+              onPress={() => {
+                setLoading(true);
+                setStatus(s);
+              }}
             >
               <Text style={[styles.chipText, status === s && styles.chipTextActive]}>{s}</Text>
             </TouchableOpacity>
@@ -150,20 +166,29 @@ export default function OrdersScreen({ navigation, route }) {
           keyExtractor={(o) => o.name}
           renderItem={renderItem}
           contentContainerStyle={{ padding: 12, paddingBottom: 96 }}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.4}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
               onRefresh={() => {
                 setRefreshing(true);
-                load();
+                reload();
               }}
               colors={[colors.primary]}
             />
           }
+          ListFooterComponent={
+            loadingMore ? (
+              <ActivityIndicator style={{ marginVertical: 16 }} color={colors.primary} />
+            ) : !hasMore && orders.length > 0 ? (
+              <Text style={styles.endText}>No more orders</Text>
+            ) : null
+          }
           ListEmptyComponent={
             <View style={styles.empty}>
               <Text style={styles.emptyText}>
-                {error ? error : "No fuel orders yet. Tap + to create one."}
+                {error ? error : "No fuel orders found."}
               </Text>
             </View>
           }
@@ -241,6 +266,7 @@ const styles = StyleSheet.create({
   },
   otpLabel: { fontSize: 11, fontWeight: "700", color: colors.accent, marginRight: 8 },
   otpValue: { fontSize: 15, fontWeight: "800", letterSpacing: 2, color: "#8A6D3B" },
+  endText: { textAlign: "center", color: colors.muted, fontSize: 13, marginVertical: 16 },
   empty: { alignItems: "center", marginTop: 60, paddingHorizontal: 24 },
   emptyText: { color: colors.muted, fontSize: 15, textAlign: "center" },
   fab: {
