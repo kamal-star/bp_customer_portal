@@ -36,7 +36,13 @@
       }
     },
     "plugins": [
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "Allow Great North Fuel to use your contacts to quickly fill in the driver's name and number."
+        }
+      ]
     ]
   }
 }

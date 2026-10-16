@@ -13,6 +13,8 @@ import {
   View,
 } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import * as Contacts from "expo-contacts";
+import { Ionicons } from "@expo/vector-icons";
 import { api, extractError } from "../api/client";
 import { colors } from "../theme";
 import { FUEL_PRODUCTS, STATIONS } from "../constants";
@@ -146,26 +148,12 @@ export default function FuelOrderForm({ initial, submitLabel, onSubmit }) {
           />
         </Field>
 
-        <Field label="Driver name *">
-          <TextInput
-            style={styles.input}
-            value={driverName}
-            onChangeText={setDriverName}
-            placeholder="Driver full name"
-            placeholderTextColor={colors.muted}
-          />
-        </Field>
-
-        <Field label="Driver mobile *">
-          <TextInput
-            style={styles.input}
-            value={driverMobile}
-            onChangeText={setDriverMobile}
-            keyboardType="phone-pad"
-            placeholder="0785123456"
-            placeholderTextColor={colors.muted}
-          />
-        </Field>
+        <DriverFields
+          driverName={driverName}
+          setDriverName={setDriverName}
+          driverMobile={driverMobile}
+          setDriverMobile={setDriverMobile}
+        />
 
         <SectionTitle>Customer information</SectionTitle>
 
@@ -261,6 +249,128 @@ function Field({ label, children }) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Driver name + mobile, with phone-contact lookup.
+//   - tap the contacts icon to pick a contact (fills name + number);
+//   - or type the name to see matching contacts and auto-fill the number.
+// Works without contacts permission for the picker; type-ahead needs permission
+// and silently falls back to a plain field if it isn't granted.
+// ---------------------------------------------------------------------------
+function cleanPhone(p) {
+  return (p || "").replace(/[^\d+]/g, "");
+}
+function contactName(c) {
+  return (c.name || [c.firstName, c.lastName].filter(Boolean).join(" ")).trim();
+}
+
+function DriverFields({ driverName, setDriverName, driverMobile, setDriverMobile }) {
+  const [contacts, setContacts] = useState(null); // null = not loaded yet
+  const [showSug, setShowSug] = useState(false);
+
+  async function ensureLoaded() {
+    if (contacts !== null) return;
+    try {
+      const { status } = await Contacts.requestPermissionsAsync();
+      if (status !== "granted") {
+        setContacts([]); // denied — picker still works, just no type-ahead
+        return;
+      }
+      const { data } = await Contacts.getContactsAsync({
+        fields: [
+          Contacts.Fields.Name,
+          Contacts.Fields.FirstName,
+          Contacts.Fields.LastName,
+          Contacts.Fields.PhoneNumbers,
+        ],
+      });
+      setContacts((data || []).filter((c) => contactName(c) && c.phoneNumbers?.length));
+    } catch (e) {
+      setContacts([]);
+    }
+  }
+
+  function apply(name, phone) {
+    setDriverName(name);
+    if (phone) setDriverMobile(cleanPhone(phone));
+    setShowSug(false);
+  }
+
+  async function openPicker() {
+    try {
+      const contact = await Contacts.presentContactPickerAsync();
+      if (contact) apply(contactName(contact), contact.phoneNumbers?.[0]?.number);
+    } catch (e) {
+      Alert.alert("Contacts", "Could not open contacts. You can type the details manually.");
+    }
+  }
+
+  const q = driverName.trim().toLowerCase();
+  const matches =
+    showSug && Array.isArray(contacts) && q.length >= 1
+      ? contacts.filter((c) => contactName(c).toLowerCase().includes(q)).slice(0, 6)
+      : [];
+
+  return (
+    <>
+      <Field label="Driver name *">
+        <View style={styles.inputRow}>
+          <TextInput
+            style={styles.inputFlex}
+            value={driverName}
+            onChangeText={(t) => {
+              setDriverName(t);
+              setShowSug(true);
+              ensureLoaded();
+            }}
+            onFocus={() => {
+              setShowSug(true);
+              ensureLoaded();
+            }}
+            placeholder="Driver full name"
+            placeholderTextColor={colors.muted}
+          />
+          <TouchableOpacity
+            style={styles.contactBtn}
+            onPress={openPicker}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="person-circle-outline" size={26} color={colors.primary} />
+          </TouchableOpacity>
+        </View>
+        {matches.length > 0 && (
+          <View style={styles.suggestBox}>
+            {matches.map((c, i) => {
+              const nm = contactName(c);
+              const ph = c.phoneNumbers?.[0]?.number || "";
+              return (
+                <TouchableOpacity
+                  key={c.id || i}
+                  style={[styles.suggestRow, i === 0 && { borderTopWidth: 0 }]}
+                  onPress={() => apply(nm, ph)}
+                >
+                  <Text style={styles.suggestName} numberOfLines={1}>{nm}</Text>
+                  <Text style={styles.suggestPhone}>{cleanPhone(ph)}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+      </Field>
+
+      <Field label="Driver mobile *">
+        <TextInput
+          style={styles.input}
+          value={driverMobile}
+          onChangeText={(t) => setDriverMobile(t)}
+          keyboardType="phone-pad"
+          placeholder="0785123456"
+          placeholderTextColor={colors.muted}
+        />
+      </Field>
+    </>
+  );
+}
+
 // Lightweight dropdown (Modal list) — avoids an extra native picker dependency.
 function Dropdown({ placeholder, value, display, options, onSelect }) {
   const [open, setOpen] = useState(false);
@@ -326,6 +436,37 @@ const styles = StyleSheet.create({
   },
   inputText: { fontSize: 16, color: colors.text },
   caret: { color: colors.muted, fontSize: 14 },
+  inputRow: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    backgroundColor: "#fff",
+    flexDirection: "row",
+    alignItems: "center",
+    minHeight: 48,
+  },
+  inputFlex: { flex: 1, fontSize: 16, color: colors.text, paddingVertical: 12 },
+  contactBtn: { paddingLeft: 8 },
+  suggestBox: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    backgroundColor: "#fff",
+    marginTop: 6,
+    overflow: "hidden",
+  },
+  suggestRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  suggestName: { fontSize: 15, color: colors.text, fontWeight: "600", flex: 1, marginRight: 10 },
+  suggestPhone: { fontSize: 13, color: colors.muted },
   textarea: { minHeight: 90, textAlignVertical: "top", display: "flex" },
   footer: {
     padding: 16,
